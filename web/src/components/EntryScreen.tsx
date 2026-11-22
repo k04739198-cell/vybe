@@ -186,9 +186,12 @@ export default function EntryScreen({
             onClick={() => onStart(selectedTag)}
             className="w-full py-4 px-8 rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-600 text-white font-extrabold text-base tracking-wide shadow-xl glow-btn transition-all duration-300 active:scale-[0.98] flex items-center justify-center space-x-2"
           >
-            <span>Start Vybing</span>
+            <span>Start Scrolling</span>
             <Zap className="h-5 w-5 fill-white" />
           </button>
+          <p className="mt-2 text-center text-[11px] text-gray-500">
+            Swipe up through live faces — just like Reels
+          </p>
         </div>
 
         {/* Trust & Safety Pills */}
