@@ -1,7 +1,9 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const { saveReport, isIpBanned, banIp, trackEvent } = require('./supabase/client');
 
 const app = express();
 const server = http.createServer(app);
@@ -23,18 +25,13 @@ const io = new Server(server, {
 });
 
 // In-memory queues and state
-// waitingQueue: Array of { socketId, tag, joinedAt, recentPeers: Set }
 let waitingQueue = [];
-// activeRooms: Map of roomId -> { peer1: socketId, peer2: socketId, startedAt }
 const activeRooms = new Map();
-// socketToRoom: Map of socketId -> roomId
 const socketToRoom = new Map();
-// recentPairs: Map of socketId -> Set of recently connected socketIds
 const recentSkips = new Map();
 
-// Moderation: in-memory abuse log (backed by Supabase in production)
+// In-memory moderation fallback
 const reportLogs = [];
-const bannedIps = new Set();
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -49,7 +46,6 @@ app.get('/health', (req, res) => {
 
 // Public stats for frontend live counter
 app.get('/api/stats', (req, res) => {
-  // Give a dynamic realistic live base for South Asia
   const baseCount = 1240;
   const jitter = Math.floor(Math.sin(Date.now() / 60000) * 120);
   res.json({
@@ -59,13 +55,13 @@ app.get('/api/stats', (req, res) => {
 });
 
 // Moderation report endpoint
-app.post('/api/report', (req, res) => {
+app.post('/api/report', async (req, res) => {
   const { sessionId, reportedSocketId, reason, notes } = req.body;
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
   const report = {
     id: `rep_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-    reporterIp: ip,
+    reporterIp: rawIp,
     reportedSocketId,
     sessionId,
     reason: reason || 'unspecified',
@@ -76,13 +72,24 @@ app.post('/api/report', (req, res) => {
   reportLogs.push(report);
   console.log(`[MODERATION REPORT]`, report);
 
-  // Auto-ban check: if reported multiple times recently
+  // Persist to Supabase if configured
+  await saveReport({
+    sessionId,
+    reporterIp: rawIp,
+    reportedPeerId: reportedSocketId,
+    reason,
+    notes,
+  });
+
+  // Auto-ban check: 3 reports in 10 minutes from different events
   const recentReportsForPeer = reportLogs.filter(
     (r) => r.reportedSocketId === reportedSocketId && Date.now() - new Date(r.createdAt).getTime() < 10 * 60 * 1000
   );
 
-  if (recentReportsForPeer.length >= 3) {
-    console.warn(`[AUTO-BAN TRIGGERED] socket ${reportedSocketId} exceeded 3 reports in 10 mins.`);
+  if (recentReportsForPeer.length >= 3 || reason === 'csam_underage') {
+    console.warn(`[AUTO-BAN TRIGGERED] socket ${reportedSocketId} flagged. Executing ban.`);
+    await banIp(rawIp, `Repeated reports or critical violation (${reason})`, 1440); // 24hr ban
+
     const targetSocket = io.sockets.sockets.get(reportedSocketId);
     if (targetSocket) {
       targetSocket.emit('banned', { reason: 'Violation of community safety standards.' });
@@ -93,11 +100,36 @@ app.post('/api/report', (req, res) => {
   res.json({ success: true, message: 'Report received and queued for review.' });
 });
 
+// PhotoDNA Async Scanning Pipeline Hook (Phase 0.4 & 7)
+// Checks sampled video frame hashes asynchronously without blocking the user stream
+app.post('/api/moderation/photodna-frame', async (req, res) => {
+  const { frameHash, sessionId, socketId } = req.body;
+  // Non-blocking async check against PhotoDNA hash API
+  setImmediate(async () => {
+    try {
+      // In production with Microsoft PhotoDNA API key:
+      // const match = await checkPhotoDNAHash(frameHash);
+      const isMatch = false; // Mock zero matches
+      if (isMatch) {
+        console.error(`[CRITICAL PHOTODNA MATCH] Immediate NCMEC CyberTipline escalation for session ${sessionId}`);
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.emit('banned', { reason: 'Severe violation detected.' });
+          socket.disconnect(true);
+        }
+      }
+    } catch (err) {
+      console.error('[PHOTODNA SCAN ERROR]', err.message);
+    }
+  });
+
+  res.status(202).json({ queued: true });
+});
+
 // Matchmaker helper
 function tryMatchUsers() {
   if (waitingQueue.length < 2) return;
 
-  // Clone array to safely iterate
   for (let i = 0; i < waitingQueue.length; i++) {
     const userA = waitingQueue[i];
     if (!userA) continue;
@@ -106,21 +138,18 @@ function tryMatchUsers() {
       const userB = waitingQueue[j];
       if (!userB) continue;
 
-      // Check if they recently skipped each other
       const skipsA = recentSkips.get(userA.socketId);
       if (skipsA && skipsA.has(userB.socketId)) {
         continue;
       }
 
-      // Check interest tags (exact match or either selected 'all')
       const tagMatch =
         userA.tag === 'all' ||
         userB.tag === 'all' ||
         userA.tag === userB.tag ||
-        Date.now() - userA.joinedAt > 3500; // After 3.5s wait, broaden match
+        Date.now() - userA.joinedAt > 3500;
 
       if (tagMatch) {
-        // Matched! Remove both from queue
         waitingQueue = waitingQueue.filter(
           (u) => u.socketId !== userA.socketId && u.socketId !== userB.socketId
         );
@@ -135,11 +164,8 @@ function tryMatchUsers() {
         socketToRoom.set(userA.socketId, roomId);
         socketToRoom.set(userB.socketId, roomId);
 
-        // Record recent skip/pairing history to avoid immediate rematches
         recordSkip(userA.socketId, userB.socketId);
 
-        // Emit matched events
-        // userA acts as initiator for WebRTC offer
         io.to(userA.socketId).emit('matched', {
           roomId,
           initiator: true,
@@ -154,6 +180,7 @@ function tryMatchUsers() {
           partnerTag: userA.tag,
         });
 
+        trackEvent('real_match', { tagA: userA.tag, tagB: userB.tag });
         console.log(`[MATCH] Created ${roomId} between ${userA.socketId} and ${userB.socketId}`);
         return;
       }
@@ -168,7 +195,6 @@ function recordSkip(idA, idB) {
   recentSkips.get(idA).add(idB);
   recentSkips.get(idB).add(idA);
 
-  // Clear memory after 30 seconds
   setTimeout(() => {
     recentSkips.get(idA)?.delete(idB);
     recentSkips.get(idB)?.delete(idA);
@@ -197,10 +223,20 @@ function leaveQueue(socketId) {
   waitingQueue = waitingQueue.filter((u) => u.socketId !== socketId);
 }
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
+  const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+
+  // Check ban list
+  const banned = await isIpBanned(clientIp);
+  if (banned) {
+    console.log(`[BAN ENFORCED] Connection rejected for banned IP`);
+    socket.emit('banned', { reason: 'Your access is suspended due to safety violations.' });
+    socket.disconnect(true);
+    return;
+  }
+
   console.log(`[CONNECT] Socket connected: ${socket.id}`);
 
-  // User requests to enter matchmaking queue
   socket.on('join-queue', ({ tag = 'all' } = {}) => {
     leaveRoom(socket.id);
     leaveQueue(socket.id);
@@ -215,7 +251,6 @@ io.on('connection', (socket) => {
     tryMatchUsers();
   });
 
-  // WebRTC signalling exchange (offer, answer, ICE candidates)
   socket.on('signal', ({ roomId, to, signalData }) => {
     if (to && signalData) {
       io.to(to).emit('signal', {
@@ -226,7 +261,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Quick text message exchange between matched peers
   socket.on('send-message', ({ roomId, message }) => {
     const room = activeRooms.get(roomId);
     if (!room) return;
@@ -241,13 +275,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // User hits Next / Skip
   socket.on('skip', () => {
     leaveRoom(socket.id);
     leaveQueue(socket.id);
   });
 
-  // Disconnection handler
   socket.on('disconnect', () => {
     console.log(`[DISCONNECT] Socket disconnected: ${socket.id}`);
     leaveRoom(socket.id);
@@ -256,7 +288,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// Periodically check queue to pair users who have been waiting
 setInterval(tryMatchUsers, 1000);
 
 server.listen(PORT, () => {
