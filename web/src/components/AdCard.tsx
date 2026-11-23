@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, FastForward, Sparkles } from 'lucide-react';
+import { FastForward, Sparkles } from 'lucide-react';
 
 interface AdCardProps {
   onDismiss: () => void;
@@ -68,15 +68,13 @@ export default function AdCard({ onDismiss }: AdCardProps) {
           Discover exclusive verified creators, premium live streams, and private community rooms.
         </p>
 
-        <a
-          href="https://vybe.live"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={onDismiss}
           className="mt-6 w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold text-xs shadow-lg shadow-violet-600/40 hover:opacity-95 transition-all flex items-center justify-center space-x-2"
         >
-          <span>Learn More</span>
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
+          <span>Continue</span>
+          <FastForward className="h-3.5 w-3.5" />
+        </button>
       </div>
 
       {/* Bottom Ad Network Notice */}

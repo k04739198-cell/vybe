@@ -251,7 +251,7 @@ Every choice below is free on its starter tier, battle-tested, and chosen to min
 | CSAM detection | PhotoDNA (Microsoft) | Free for platforms | Frame scanning against known CSAM hashes |
 | CSAM reporting | NCMEC CyberTipline | Free | Mandatory reporting pipeline |
 | CDN / Security | Cloudflare | Free tier | DDoS protection, geo-blocking, SSL |
-| Domain | Namecheap | \~$15–20/year | vybe.live or vybe.chat |
+| Domain | Namecheap | \~$15–20/year | custom domain (e.g. to be registered) |
 | Decoy clips | HeyGen / D-ID | \~$30–50 one-time | Generate 10 AI face clips |
 
 **Total month-one infrastructure cost: \~$20–30**
@@ -287,7 +287,7 @@ All video flows directly between users (peer-to-peer). The server never sees the
 
 **Domain — check and register immediately**
 
-- Primary: vybe.live
+- Primary: custom domain (to be registered)
 - Backup 1: vybe.chat
 - Backup 2: getvybe.app
 - Register on Namecheap, pay for 2 years upfront, enable WHOIS privacy
@@ -298,7 +298,7 @@ All video flows directly between users (peer-to-peer). The server never sees the
 - [ ] Register Private Limited company (can run 2–3 weeks in parallel)
 - [ ] Apply for NCMEC CyberTipline account
 - [ ] Apply for PhotoDNA (Microsoft)
-- [ ] Set up a business email: hello@vybe.live
+- [ ] Set up a business email: hello@yourdomain.com
 - [ ] Create Vybe accounts on Instagram, Twitter/X, YouTube — secure the handle before launch
 - [ ] Identify 2–3 college/youth creators in India for the launch push
 - [ ] Sign up for ExoClick and PropellerAds ad publisher accounts
