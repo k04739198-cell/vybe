@@ -62,14 +62,15 @@ export default function VideoScreen({
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const [inputText, setInputText] = useState('');
+  const [sessionNonce, setSessionNonce] = useState(0);
 
   // Unique key that changes when the displayed card should change
   const cardKey = useMemo(() => {
-    if (showAdCard) return `ad-${Date.now()}`;
-    if (status === 'decoy') return `decoy-${Date.now()}`;
+    if (showAdCard) return `ad-${sessionNonce}`;
+    if (status === 'decoy') return `decoy-${sessionNonce}`;
     if (remoteStream) return `peer-${remoteStream.id}`;
-    return `search-${status}`;
-  }, [showAdCard, status, remoteStream]);
+    return `search-${status}-${sessionNonce}`;
+  }, [showAdCard, status, remoteStream, sessionNonce]);
 
   // Bind local stream
   useEffect(() => {
@@ -94,11 +95,17 @@ export default function VideoScreen({
 
   // Handle swipe next — either dismiss ad or skip to next peer
   const handleSwipeNext = () => {
+    setSessionNonce((n) => n + 1);
     if (showAdCard) {
       onDismissAd();
     } else {
       onSkip();
     }
+  };
+
+  const handleDecoyFinishedInternal = () => {
+    setSessionNonce((n) => n + 1);
+    onDecoyFinished();
   };
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -112,7 +119,13 @@ export default function VideoScreen({
 
     // ── Decoy cold-start card ──
     if (status === 'decoy') {
-      return <DecoyOverlay onDecoyFinished={onDecoyFinished} onSkip={onSkip} />;
+      return (
+        <DecoyOverlay
+          key={`decoy-inst-${sessionNonce}`}
+          onDecoyFinished={handleDecoyFinishedInternal}
+          onSkip={handleSwipeNext}
+        />
+      );
     }
 
     // ── Live peer connection card ──

@@ -128,7 +128,7 @@ app.post('/api/moderation/photodna-frame', async (req, res) => {
 
 // Matchmaker helper
 function tryMatchUsers() {
-  if (waitingQueue.length < 2) return;
+  if (waitingQueue.length < 2) return false;
 
   for (let i = 0; i < waitingQueue.length; i++) {
     const userA = waitingQueue[i];
@@ -182,10 +182,11 @@ function tryMatchUsers() {
 
         trackEvent('real_match', { tagA: userA.tag, tagB: userB.tag });
         console.log(`[MATCH] Created ${roomId} between ${userA.socketId} and ${userB.socketId}`);
-        return;
+        return true;
       }
     }
   }
+  return false;
 }
 
 function recordSkip(idA, idB) {
@@ -248,7 +249,14 @@ io.on('connection', async (socket) => {
     });
 
     socket.emit('queue-status', { status: 'waiting', position: waitingQueue.length });
-    tryMatchUsers();
+    const matched = tryMatchUsers();
+    if (!matched) {
+      setTimeout(() => {
+        if (waitingQueue.some((u) => u.socketId === socket.id) && !socketToRoom.has(socket.id)) {
+          socket.emit('queue-empty');
+        }
+      }, 400);
+    }
   });
 
   socket.on('signal', ({ roomId, to, signalData }) => {
