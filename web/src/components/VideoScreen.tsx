@@ -14,7 +14,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { ConnectionStatus, ChatMessage, InterestTag } from '@/lib/types';
-import DecoyOverlay from './DecoyOverlay';
+import StreamOverlay from './StreamOverlay';
 import AdCard from './AdCard';
 import SwipeVideoFeed from './SwipeVideoFeed';
 
@@ -28,7 +28,8 @@ interface VideoScreenProps {
   partnerTag: string | null;
   messages: ChatMessage[];
   showAdCard: boolean;
-  currentDecoyClip?: string | null;
+  currentPreviewClip?: string | null;
+  cooldownSeconds?: number;
   onSkip: () => void;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
@@ -37,7 +38,7 @@ interface VideoScreenProps {
   onLeave: () => void;
   onSendMessage: (text: string) => void;
   onDismissAd: () => void;
-  onDecoyFinished: () => void;
+  onPreviewFinished: () => void;
 }
 
 export default function VideoScreen({
@@ -50,7 +51,8 @@ export default function VideoScreen({
   partnerTag,
   messages,
   showAdCard,
-  currentDecoyClip,
+  currentPreviewClip,
+  cooldownSeconds = 0,
   onSkip,
   onToggleAudio,
   onToggleVideo,
@@ -59,7 +61,7 @@ export default function VideoScreen({
   onLeave,
   onSendMessage,
   onDismissAd,
-  onDecoyFinished,
+  onPreviewFinished,
 }: VideoScreenProps) {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -69,7 +71,7 @@ export default function VideoScreen({
   // Unique key that changes when the displayed card should change
   const cardKey = useMemo(() => {
     if (showAdCard) return `ad-${sessionNonce}`;
-    if (status === 'decoy') return `decoy-${sessionNonce}`;
+    if (status === 'preview') return `preview-${sessionNonce}`;
     if (remoteStream) return `peer-${remoteStream.id}`;
     return `search-${status}-${sessionNonce}`;
   }, [showAdCard, status, remoteStream, sessionNonce]);
@@ -105,9 +107,9 @@ export default function VideoScreen({
     }
   };
 
-  const handleDecoyFinishedInternal = () => {
+  const handlePreviewFinishedInternal = () => {
     setSessionNonce((n) => n + 1);
-    onDecoyFinished();
+    onPreviewFinished();
   };
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -119,13 +121,13 @@ export default function VideoScreen({
       return <AdCard onDismiss={onDismissAd} />;
     }
 
-    // ── Decoy cold-start card ──
-    if (status === 'decoy') {
+    // ── Stream preview card ──
+    if (status === 'preview') {
       return (
-        <DecoyOverlay
-          key={`decoy-inst-${sessionNonce}`}
-          clipUrl={currentDecoyClip}
-          onDecoyFinished={handleDecoyFinishedInternal}
+        <StreamOverlay
+          key={`stream-inst-${sessionNonce}`}
+          clipUrl={currentPreviewClip}
+          onPreviewFinished={handlePreviewFinishedInternal}
           onSkip={handleSwipeNext}
         />
       );
@@ -195,6 +197,13 @@ export default function VideoScreen({
       </SwipeVideoFeed>
 
       {/* ━━━ OVERLAY HUD (always on top of the feed) ━━━ */}
+
+      {/* Bot Prevention Cooldown Banner */}
+      {cooldownSeconds > 0 && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-full bg-amber-500/95 text-black font-bold text-xs backdrop-blur-md shadow-2xl flex items-center space-x-1.5 pointer-events-none animate-in fade-in zoom-in-95">
+          <span>⚠️ Slow down — bot cooldown active: {cooldownSeconds}s</span>
+        </div>
+      )}
 
       {/* Top Bar */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-4 pt-5 md:p-6 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-none">

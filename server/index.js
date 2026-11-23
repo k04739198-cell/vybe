@@ -6,6 +6,16 @@ const cors = require('cors');
 const { saveReport, isIpBanned, banIp, trackEvent } = require('./supabase/client');
 const { reportToNcmecCyberTipline } = require('./moderation/ncmec');
 const {
+  checkNewSessionRateLimit,
+  checkReportRateLimit,
+  checkSocketEventRateLimit,
+  recordSkipAndCheckCooldown,
+  getSocketCooldown,
+  recordReportAgainstTarget,
+  clearSocketTracking,
+} = require('./security/rateLimiter');
+const { getIceServers } = require('./webrtc/iceConfig');
+const {
   initUserSession,
   getUserSession,
   removeUserSession,
@@ -40,6 +50,7 @@ let waitingQueue = [];
 const activeRooms = new Map();
 const socketToRoom = new Map();
 const recentSkips = new Map();
+const socketToIp = new Map();
 
 // In-memory moderation fallback
 const reportLogs = [];
@@ -65,10 +76,27 @@ app.get('/api/stats', (req, res) => {
   });
 });
 
+// Secure dynamic ICE / TURN credentials endpoint (Zero client-side secrets)
+app.get('/api/webrtc/ice-servers', (req, res) => {
+  res.set('Cache-Control', 'no-store, max-age=0');
+  res.json({
+    iceServers: getIceServers(),
+  });
+});
+
 // Moderation report endpoint
 app.post('/api/report', async (req, res) => {
   const { sessionId, reportedSocketId, reason, notes } = req.body;
-  const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+  const rawIp = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || '';
+
+  // 1. Report Rate Limiting: Max 10 reports per IP per hour
+  const reportLimit = checkReportRateLimit(rawIp);
+  if (!reportLimit.allowed) {
+    return res.status(429).json({
+      error: reportLimit.error,
+      code: 'REPORT_RATE_LIMIT_EXCEEDED',
+    });
+  }
 
   const report = {
     id: `rep_${Date.now()}_${Math.random().toString(36).substring(7)}`,
@@ -92,10 +120,8 @@ app.post('/api/report', async (req, res) => {
     notes,
   });
 
-  // Auto-ban check: 3 reports in 10 minutes from different events
-  const recentReportsForPeer = reportLogs.filter(
-    (r) => r.reportedSocketId === reportedSocketId && Date.now() - new Date(r.createdAt).getTime() < 10 * 60 * 1000
-  );
+  // 2. Target Auto-Ban: 3+ reports within 10 minutes or CSAM violation
+  const banStatus = await recordReportAgainstTarget(reportedSocketId, rawIp, reason, socketToIp);
 
   let ncmecResult = null;
   if (reason === 'csam_underage') {
@@ -103,14 +129,16 @@ app.post('/api/report', async (req, res) => {
       sessionId,
       reportedSocketId,
       reporterIp: rawIp,
+      reportedIp: socketToIp.get(reportedSocketId) || null,
       reason,
       notes,
     });
   }
 
-  if (recentReportsForPeer.length >= 3 || reason === 'csam_underage') {
-    console.warn(`[AUTO-BAN TRIGGERED] socket ${reportedSocketId} flagged. Executing ban.`);
-    await banIp(rawIp, `Repeated reports or critical violation (${reason})`, 1440); // 24hr ban
+  if (banStatus.banned || reason === 'csam_underage') {
+    const targetIp = socketToIp.get(reportedSocketId) || rawIp;
+    console.warn(`[AUTO-BAN TRIGGERED] socket ${reportedSocketId} (IP: ${targetIp}) flagged. Executing ban.`);
+    await banIp(targetIp, `Violations: ${reason} (${banStatus.reportCount || 1} reports)`, 1440); // 24hr ban
 
     const targetSocket = io.sockets.sockets.get(reportedSocketId);
     if (targetSocket) {
@@ -124,6 +152,7 @@ app.post('/api/report', async (req, res) => {
     message: 'Report received and queued for review.',
     ncmecEscalated: !!ncmecResult,
     ncmecReportId: ncmecResult?.incidentId || null,
+    targetBanned: banStatus.banned || reason === 'csam_underage',
   });
 });
 
@@ -275,7 +304,7 @@ function leaveQueue(socketId) {
 }
 
 io.on('connection', async (socket) => {
-  const clientIp = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+  const clientIp = socket.handshake.headers['x-forwarded-for']?.split(',')[0].trim() || socket.handshake.address;
 
   // Check ban list
   const banned = await isIpBanned(clientIp);
@@ -286,10 +315,37 @@ io.on('connection', async (socket) => {
     return;
   }
 
-  console.log(`[CONNECT] Socket connected: ${socket.id}`);
+  // Rate Limiting: Max 1 new session per IP per 30 seconds
+  const sessionLimit = checkNewSessionRateLimit(clientIp);
+  if (!sessionLimit.allowed) {
+    console.log(`[RATE LIMIT] IP ${clientIp} rejected: ${sessionLimit.error}`);
+    socket.emit('rate-limited', { reason: sessionLimit.error, retryAfter: sessionLimit.remainingSeconds });
+    socket.disconnect(true);
+    return;
+  }
+
+  socketToIp.set(socket.id, clientIp);
+  console.log(`[CONNECT] Socket connected: ${socket.id} (IP: ${clientIp})`);
   initUserSession(socket.id);
 
+  // Security: Block IPs that send more than 100 Socket.io events per minute
+  socket.use(async ([event, ...args], next) => {
+    const { blocked } = await checkSocketEventRateLimit(clientIp, socket);
+    if (blocked) return;
+    next();
+  });
+
   socket.on('join-queue', ({ tag = 'all' } = {}) => {
+    // Check if user is on anti-bot skip cooldown
+    const cooldown = getSocketCooldown(socket.id);
+    if (cooldown.onCooldown) {
+      socket.emit('cooldown', {
+        remainingSeconds: cooldown.remainingSeconds,
+        message: 'Rapid skipping detected. Bot prevention cooldown active.',
+      });
+      return;
+    }
+
     leaveRoom(socket.id);
     leaveQueue(socket.id);
 
@@ -310,16 +366,16 @@ io.on('connection', async (socket) => {
           if (shouldTriggerDecoy(currentSession)) {
             const clipUrl = executeDecoyTrigger(currentSession);
             leaveQueue(socket.id);
-            socket.emit('trigger-decoy', {
+            socket.emit('stream-preview', {
               clipUrl,
               swipeCount: currentSession.swipeCount,
-              decoyCount: currentSession.decoyCount,
+              count: currentSession.decoyCount,
             });
           } else {
             currentSession.lastWasDecoy = false;
             socket.emit('queue-waiting', {
               swipeCount: currentSession.swipeCount,
-              decoyCount: currentSession.decoyCount,
+              count: currentSession.decoyCount,
             });
           }
         }
@@ -352,6 +408,15 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('skip', () => {
+    // Spam prevention: check if user skipped 20+ times in <60 seconds
+    const cooldown = recordSkipAndCheckCooldown(socket.id);
+    if (cooldown.onCooldown) {
+      socket.emit('cooldown', {
+        remainingSeconds: cooldown.remainingSeconds,
+        message: cooldown.message,
+      });
+    }
+
     recordUserSkip(socket.id);
     leaveRoom(socket.id);
     leaveQueue(socket.id);
@@ -363,6 +428,8 @@ io.on('connection', async (socket) => {
     leaveQueue(socket.id);
     recentSkips.delete(socket.id);
     removeUserSession(socket.id);
+    socketToIp.delete(socket.id);
+    clearSocketTracking(socket.id);
   });
 });
 

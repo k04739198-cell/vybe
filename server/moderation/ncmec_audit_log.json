@@ -36,5 +36,43 @@
       "priority": "IMMEDIATE_ESCALATION"
     },
     "status": "QUEUED_TEST_MODE"
+  },
+  {
+    "incidentId": "NCMEC_INC_1795450497622_4CTR5",
+    "timestamp": "2026-11-23T16:14:57.622Z",
+    "incidentType": "Child Sexual Abuse Material (CSAM) / Minor Exploitation",
+    "legalReference": "18 U.S.C. § 2258A / POCSO Act / IT Act Section 67B",
+    "platform": "Vybe WebRTC Communications Platform",
+    "session": {
+      "sessionId": "test_session_1795450497622",
+      "reportedSocketId": "mock_peer_socket_test",
+      "reportedIpHash": "unavailable",
+      "reporterIpHash": "4284a88dc734a001699e9674ce24f7ef1e145c0e2e401d30f8ef7b625b30e84f"
+    },
+    "incidentDetails": {
+      "reason": "csam_underage",
+      "notes": "Compliance automated verification test report.",
+      "priority": "IMMEDIATE_ESCALATION"
+    },
+    "status": "QUEUED_TEST_MODE"
+  },
+  {
+    "incidentId": "NCMEC_INC_1795450497774_QNB8H",
+    "timestamp": "2026-11-23T16:14:57.774Z",
+    "incidentType": "Child Sexual Abuse Material (CSAM) / Minor Exploitation",
+    "legalReference": "18 U.S.C. § 2258A / POCSO Act / IT Act Section 67B",
+    "platform": "Vybe WebRTC Communications Platform",
+    "session": {
+      "sessionId": "test_session_compliance_123",
+      "reportedSocketId": "flagged_socket_999",
+      "reportedIpHash": "unavailable",
+      "reporterIpHash": "91d0e11809409cb9c20f3e263825960ca240714d59c9f8259f93fa969e30f8b4"
+    },
+    "incidentDetails": {
+      "reason": "csam_underage",
+      "notes": "Automated compliance test submission.",
+      "priority": "IMMEDIATE_ESCALATION"
+    },
+    "status": "QUEUED_TEST_MODE"
   }
 ]

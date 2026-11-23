@@ -7,7 +7,7 @@ export type ConnectionStatus =
   | 'waiting-in-queue'
   | 'connecting'
   | 'connected'
-  | 'decoy'
+  | 'preview'
   | 'skipped'
   | 'disconnected';
 
@@ -18,7 +18,7 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export interface DecoyClip {
+export interface StreamClip {
   id: string;
   title: string;
   videoUrl: string;

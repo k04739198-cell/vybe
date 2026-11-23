@@ -27,7 +27,8 @@ export default function Home() {
     messages,
     showAdCard,
     onlineCount,
-    currentDecoyClip,
+    currentPreviewClip,
+    cooldownSeconds,
     initLocalStream,
     findNextMatch,
     skipCurrent,
@@ -37,7 +38,7 @@ export default function Home() {
     flipCamera,
     reportUser,
     dismissAdCard,
-    onDecoyFinished,
+    onPreviewFinished,
   } = useWebRTC();
 
   const handleStartVybing = async (tag: InterestTag) => {
@@ -101,7 +102,8 @@ export default function Home() {
           partnerTag={partnerTag}
           messages={messages}
           showAdCard={showAdCard}
-          currentDecoyClip={currentDecoyClip}
+          currentPreviewClip={currentPreviewClip}
+          cooldownSeconds={cooldownSeconds}
           onSkip={skipCurrent}
           onToggleAudio={toggleAudio}
           onToggleVideo={toggleVideo}
@@ -110,7 +112,7 @@ export default function Home() {
           onLeave={handleLeaveSession}
           onSendMessage={sendMessage}
           onDismissAd={dismissAdCard}
-          onDecoyFinished={onDecoyFinished}
+          onPreviewFinished={onPreviewFinished}
         />
       )}
     </main>

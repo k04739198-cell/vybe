@@ -45,10 +45,12 @@ export function useWebRTC() {
   const [skipCount, setSkipCount] = useState(0);
   const [showAdCard, setShowAdCard] = useState(false);
   const [onlineCount, setOnlineCount] = useState<number>(1420);
-  const [currentDecoyClip, setCurrentDecoyClip] = useState<string | null>(null);
+  const [currentPreviewClip, setCurrentPreviewClip] = useState<string | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const socketRef = useRef<Socket | null>(null);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
+  const iceServersRef = useRef<RTCConfiguration>(ICE_SERVERS);
   const localStreamRef = useRef<MediaStream | null>(null);
   const matchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const findNextMatchRef = useRef<((tag?: InterestTag) => void) | null>(null);
@@ -57,6 +59,29 @@ export function useWebRTC() {
   useEffect(() => {
     localStreamRef.current = localStream;
   }, [localStream]);
+
+  // Fetch secure dynamic ICE servers from backend on initialization
+  useEffect(() => {
+    fetch(`${SOCKET_SERVER_URL}/api/webrtc/ice-servers`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.iceServers && Array.isArray(data.iceServers)) {
+          iceServersRef.current = { iceServers: data.iceServers };
+        }
+      })
+      .catch((err) => {
+        console.warn('Using default STUN configuration:', err.message);
+      });
+  }, []);
+
+  // Cooldown countdown timer
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
 
   // Clean up WebRTC peer connection
   const closePeerConnection = useCallback(() => {
@@ -118,15 +143,30 @@ export function useWebRTC() {
       console.log('Queue status:', data);
     });
 
-    // Server triggers decoy placement with specific randomized clip
-    socket.on('trigger-decoy', ({ clipUrl }: { clipUrl: string; swipeCount?: number; decoyCount?: number }) => {
-      console.log('Server triggered decoy placement:', clipUrl);
+    // Anti-bot skip cooldown notice
+    socket.on('cooldown', ({ remainingSeconds }: { remainingSeconds: number; message?: string }) => {
+      setCooldownSeconds(remainingSeconds);
+    });
+
+    // Rate limit notice
+    socket.on('rate-limited', (data: { reason: string }) => {
+      console.warn('Signalling server rate limit:', data.reason);
+    });
+
+    // Banned notice
+    socket.on('banned', (data: { reason: string }) => {
+      alert(`Access Restricted: ${data.reason}`);
+      setStatus('disconnected');
+    });
+
+    // Server triggers preview placement with specific randomized clip
+    socket.on('stream-preview', ({ clipUrl }: { clipUrl: string; swipeCount?: number; count?: number }) => {
       if (matchTimeoutRef.current) {
         clearTimeout(matchTimeoutRef.current);
         matchTimeoutRef.current = null;
       }
-      setCurrentDecoyClip(clipUrl);
-      setStatus('decoy');
+      setCurrentPreviewClip(clipUrl);
+      setStatus('preview');
     });
 
     // Server informs client to remain waiting in queue (e.g. Swipes 2-10, Power user 41+)
@@ -139,14 +179,13 @@ export function useWebRTC() {
       setStatus('waiting-in-queue');
     });
 
-    // Fallback: when legacy server indicates queue is empty
+    // Fallback: when server indicates queue is empty
     socket.on('queue-empty', () => {
-      console.log('Server indicated queue is empty');
       if (matchTimeoutRef.current) {
         clearTimeout(matchTimeoutRef.current);
         matchTimeoutRef.current = null;
       }
-      setStatus('decoy');
+      setStatus('preview');
     });
 
     // Partner matched
@@ -162,8 +201,8 @@ export function useWebRTC() {
       setPartnerTag(pTag);
       setStatus('connecting');
 
-      // Create RTCPeerConnection
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      // Create RTCPeerConnection with dynamic or STUN ICE servers
+      const pc = new RTCPeerConnection(iceServersRef.current || ICE_SERVERS);
       peerConnRef.current = pc;
 
       // Add local stream tracks to PC
@@ -285,7 +324,7 @@ export function useWebRTC() {
       const activeTag = tag || currentTag;
       setCurrentTag(activeTag);
 
-      // Only increment skip counter if user explicitly skipped (not automatic decoy transition)
+      // Only increment skip counter if user explicitly skipped (not automatic preview transition)
       if (isUserSkip) {
         setSkipCount((prev) => {
           const newCount = prev + 1;
@@ -439,7 +478,8 @@ export function useWebRTC() {
     skipCount,
     showAdCard,
     onlineCount,
-    currentDecoyClip,
+    currentPreviewClip,
+    cooldownSeconds,
     initLocalStream,
     findNextMatch,
     skipCurrent,
@@ -449,6 +489,6 @@ export function useWebRTC() {
     flipCamera,
     reportUser,
     dismissAdCard,
-    onDecoyFinished: () => findNextMatch(currentTag),
+    onPreviewFinished: () => findNextMatch(currentTag),
   };
 }
