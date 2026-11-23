@@ -4,6 +4,16 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { saveReport, isIpBanned, banIp, trackEvent } = require('./supabase/client');
+const {
+  initUserSession,
+  getUserSession,
+  removeUserSession,
+  recordUserSkip,
+  recordJoinQueue,
+  recordRealMatch,
+  shouldTriggerDecoy,
+  executeDecoyTrigger,
+} = require('./decoyManager');
 
 const app = express();
 const server = http.createServer(app);
@@ -165,6 +175,7 @@ function tryMatchUsers() {
         socketToRoom.set(userB.socketId, roomId);
 
         recordSkip(userA.socketId, userB.socketId);
+        recordRealMatch(userA.socketId, userB.socketId);
 
         io.to(userA.socketId).emit('matched', {
           roomId,
@@ -237,10 +248,13 @@ io.on('connection', async (socket) => {
   }
 
   console.log(`[CONNECT] Socket connected: ${socket.id}`);
+  initUserSession(socket.id);
 
   socket.on('join-queue', ({ tag = 'all' } = {}) => {
     leaveRoom(socket.id);
     leaveQueue(socket.id);
+
+    const session = recordJoinQueue(socket.id);
 
     waitingQueue.push({
       socketId: socket.id,
@@ -253,9 +267,24 @@ io.on('connection', async (socket) => {
     if (!matched) {
       setTimeout(() => {
         if (waitingQueue.some((u) => u.socketId === socket.id) && !socketToRoom.has(socket.id)) {
-          socket.emit('queue-empty');
+          const currentSession = getUserSession(socket.id);
+          if (shouldTriggerDecoy(currentSession)) {
+            const clipUrl = executeDecoyTrigger(currentSession);
+            leaveQueue(socket.id);
+            socket.emit('trigger-decoy', {
+              clipUrl,
+              swipeCount: currentSession.swipeCount,
+              decoyCount: currentSession.decoyCount,
+            });
+          } else {
+            currentSession.lastWasDecoy = false;
+            socket.emit('queue-waiting', {
+              swipeCount: currentSession.swipeCount,
+              decoyCount: currentSession.decoyCount,
+            });
+          }
         }
-      }, 400);
+      }, 350);
     }
   });
 
@@ -284,6 +313,7 @@ io.on('connection', async (socket) => {
   });
 
   socket.on('skip', () => {
+    recordUserSkip(socket.id);
     leaveRoom(socket.id);
     leaveQueue(socket.id);
   });
@@ -293,6 +323,7 @@ io.on('connection', async (socket) => {
     leaveRoom(socket.id);
     leaveQueue(socket.id);
     recentSkips.delete(socket.id);
+    removeUserSession(socket.id);
   });
 });
 

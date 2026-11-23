@@ -31,6 +31,7 @@ export function useWebRTC() {
   const [skipCount, setSkipCount] = useState(0);
   const [showAdCard, setShowAdCard] = useState(false);
   const [onlineCount, setOnlineCount] = useState<number>(1420);
+  const [currentDecoyClip, setCurrentDecoyClip] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
   const peerConnRef = useRef<RTCPeerConnection | null>(null);
@@ -103,9 +104,30 @@ export function useWebRTC() {
       console.log('Queue status:', data);
     });
 
-    // When server detects matchmaking queue is empty, trigger decoy immediately
+    // Server triggers decoy placement with specific randomized clip
+    socket.on('trigger-decoy', ({ clipUrl }: { clipUrl: string; swipeCount?: number; decoyCount?: number }) => {
+      console.log('Server triggered decoy placement:', clipUrl);
+      if (matchTimeoutRef.current) {
+        clearTimeout(matchTimeoutRef.current);
+        matchTimeoutRef.current = null;
+      }
+      setCurrentDecoyClip(clipUrl);
+      setStatus('decoy');
+    });
+
+    // Server informs client to remain waiting in queue (e.g. Swipes 2-10, Power user 41+)
+    socket.on('queue-waiting', (data) => {
+      console.log('Server indicated queue waiting mode:', data);
+      if (matchTimeoutRef.current) {
+        clearTimeout(matchTimeoutRef.current);
+        matchTimeoutRef.current = null;
+      }
+      setStatus('waiting-in-queue');
+    });
+
+    // Fallback: when legacy server indicates queue is empty
     socket.on('queue-empty', () => {
-      console.log('Server indicated queue is empty -> activating decoy clip');
+      console.log('Server indicated queue is empty');
       if (matchTimeoutRef.current) {
         clearTimeout(matchTimeoutRef.current);
         matchTimeoutRef.current = null;
@@ -266,12 +288,10 @@ export function useWebRTC() {
         socketRef.current.emit('join-queue', { tag: activeTag });
       }
 
-      // Cold start decoy fallback: if no peer found within 1.2s, trigger decoy
-      if (matchTimeoutRef.current) clearTimeout(matchTimeoutRef.current);
-      matchTimeoutRef.current = setTimeout(() => {
-        console.log('Matchmaking queue timeout reached -> triggering Decoy cold start');
-        setStatus('decoy');
-      }, 1200);
+      if (matchTimeoutRef.current) {
+        clearTimeout(matchTimeoutRef.current);
+        matchTimeoutRef.current = null;
+      }
     },
     [closePeerConnection, currentTag]
   );
@@ -405,6 +425,7 @@ export function useWebRTC() {
     skipCount,
     showAdCard,
     onlineCount,
+    currentDecoyClip,
     initLocalStream,
     findNextMatch,
     skipCurrent,

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: vybe-server
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: CLIENT_URL
+        value: "*"
+    healthCheckPath: /health

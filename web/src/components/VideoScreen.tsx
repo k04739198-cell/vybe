@@ -28,6 +28,7 @@ interface VideoScreenProps {
   partnerTag: string | null;
   messages: ChatMessage[];
   showAdCard: boolean;
+  currentDecoyClip?: string | null;
   onSkip: () => void;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
@@ -49,6 +50,7 @@ export default function VideoScreen({
   partnerTag,
   messages,
   showAdCard,
+  currentDecoyClip,
   onSkip,
   onToggleAudio,
   onToggleVideo,
@@ -122,6 +124,7 @@ export default function VideoScreen({
       return (
         <DecoyOverlay
           key={`decoy-inst-${sessionNonce}`}
+          clipUrl={currentDecoyClip}
           onDecoyFinished={handleDecoyFinishedInternal}
           onSkip={handleSwipeNext}
         />

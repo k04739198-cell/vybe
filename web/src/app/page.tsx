@@ -27,6 +27,7 @@ export default function Home() {
     messages,
     showAdCard,
     onlineCount,
+    currentDecoyClip,
     initLocalStream,
     findNextMatch,
     skipCurrent,
@@ -100,6 +101,7 @@ export default function Home() {
           partnerTag={partnerTag}
           messages={messages}
           showAdCard={showAdCard}
+          currentDecoyClip={currentDecoyClip}
           onSkip={skipCurrent}
           onToggleAudio={toggleAudio}
           onToggleVideo={toggleVideo}

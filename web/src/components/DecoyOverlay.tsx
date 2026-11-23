@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 
 interface DecoyOverlayProps {
+  clipUrl?: string | null;
   onDecoyFinished: () => void;
   onSkip?: () => void;
 }
@@ -44,8 +45,9 @@ function pickRandomClip(): string {
   return selected;
 }
 
-export default function DecoyOverlay({ onDecoyFinished }: DecoyOverlayProps) {
-  const [clipUrl] = useState<string>(() => pickRandomClip());
+export default function DecoyOverlay({ clipUrl: serverClipUrl, onDecoyFinished }: DecoyOverlayProps) {
+  const [clipUrl] = useState<string>(() => serverClipUrl || pickRandomClip());
+  const activeClip = serverClipUrl || clipUrl;
   const [stage, setStage] = useState<'playing' | 'missed'>('playing');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const finishedRef = useRef(false);
@@ -85,14 +87,14 @@ export default function DecoyOverlay({ onDecoyFinished }: DecoyOverlayProps) {
         console.warn('Decoy autoplay prevented or stalled:', err);
       });
     }
-  }, [clipUrl]);
+  }, [activeClip]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black select-none">
       {/* Fullscreen Video - object-fit: cover, fills full screen on mobile with NO black bars */}
       <video
         ref={videoRef}
-        src={clipUrl}
+        src={activeClip}
         autoPlay
         playsInline
         muted
