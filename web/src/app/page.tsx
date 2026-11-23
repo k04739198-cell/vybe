@@ -8,6 +8,7 @@ import EntryScreen from '@/components/EntryScreen';
 import VideoScreen from '@/components/VideoScreen';
 import { useWebRTC } from '@/hooks/useWebRTC';
 import { InterestTag, ReportReason } from '@/lib/types';
+import { webApplicationSchema, faqPageSchema } from '@/lib/structuredData';
 
 export default function Home() {
   const [isAgeVerified, setIsAgeVerified] = useState(false);
@@ -60,7 +61,21 @@ export default function Home() {
   };
 
   return (
-    <main className="relative w-full h-[100dvh] overflow-hidden bg-[#0B0B0F] text-white">
+    <main
+      className={`relative w-full h-[100dvh] bg-[#0B0B0F] text-white ${
+        view === 'entry' ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'
+      }`}
+    >
+      {/* Schema.org Structured Data (JSON-LD) for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPageSchema) }}
+      />
+
       {/* 18+ Age Gate Splash Modal */}
       {!isAgeVerified && (
         <AgeGateModal

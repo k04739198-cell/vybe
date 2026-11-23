@@ -10,6 +10,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { InterestTag } from '@/lib/types';
+import FaqSection from './FaqSection';
 
 interface EntryScreenProps {
   onStart: (tag: InterestTag) => void;
@@ -50,7 +51,7 @@ export default function EntryScreen({
   }, [localStream]);
 
   return (
-    <div className="relative w-full h-full min-h-[100dvh] flex flex-col justify-between p-5 md:p-8 bg-[#0B0B0F] text-white overflow-hidden select-none">
+    <div className="relative w-full min-h-[100dvh] flex flex-col justify-between p-5 md:p-8 bg-[#0B0B0F] text-white overflow-y-auto overflow-x-hidden select-none">
       {/* Background radial glow */}
       <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full bg-violet-600/20 blur-[120px] pointer-events-none" />
       <div className="absolute -bottom-32 right-0 w-80 h-80 rounded-full bg-fuchsia-600/15 blur-[100px] pointer-events-none" />
@@ -211,6 +212,9 @@ export default function EntryScreen({
           </span>
         </div>
       </main>
+
+      {/* SEO FAQ Section */}
+      <FaqSection />
 
       {/* Footer */}
       <footer className="relative z-10 flex flex-col md:flex-row items-center justify-between border-t border-white/5 pt-4 text-[11px] text-gray-500">
