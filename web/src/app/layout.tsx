@@ -14,12 +14,47 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Vybe — Every stranger is a Vybe away",
-  description: "Instant no-login random video chat built for South Asia. Fast, clean, and modern.",
-  keywords: ["vybe", "random video chat", "south asia video chat", "omegle alternative"],
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || 'https://vybe-two-gamma.vercel.app'
+  ),
+  title: "Vybe — Random Video Chat. Meet Strangers Instantly.",
+  description:
+    "Vybe connects you to real people via live video, instantly. No sign up, no login. Just open and start.",
+  keywords: [
+    "vybe",
+    "random video chat",
+    "meet strangers instantly",
+    "video chat with strangers",
+    "south asia video chat",
+    "omegle alternative",
+  ],
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
+  },
+  openGraph: {
+    title: "Vybe — Random Video Chat. Meet Strangers Instantly.",
+    description:
+      "Vybe connects you to real people via live video, instantly. No sign up, no login. Just open and start.",
+    url: "https://vybe-two-gamma.vercel.app",
+    siteName: "Vybe",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Vybe — Random Video Chat. Meet Strangers Instantly.",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Vybe — Random Video Chat. Meet Strangers Instantly.",
+    description:
+      "Vybe connects you to real people via live video, instantly. No sign up, no login. Just open and start.",
+    images: ["/og-image.png"],
   },
 };
 
