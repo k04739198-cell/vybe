@@ -37,7 +37,6 @@ export default function EntryScreen({
   selectedTag,
   onSelectTag,
   localStream,
-  onOpenTerms,
   onlineCount,
   onRequestPermissions,
   permissionDenied,
@@ -215,11 +214,16 @@ export default function EntryScreen({
 
       {/* Footer */}
       <footer className="relative z-10 flex flex-col md:flex-row items-center justify-between border-t border-white/5 pt-4 text-[11px] text-gray-500">
-        <div>
-          <span>© 2026 Vybe. All rights reserved. </span>
-          <button onClick={onOpenTerms} className="text-violet-400 hover:underline ml-1">
-            Terms & Guidelines
-          </button>
+        <div className="flex items-center space-x-2">
+          <span>© 2026 Vybe. All rights reserved.</span>
+          <span>•</span>
+          <a href="/terms" className="text-violet-400 hover:underline">
+            Terms of Service
+          </a>
+          <span>•</span>
+          <a href="/privacy" className="text-violet-400 hover:underline">
+            Privacy Policy
+          </a>
         </div>
         <div className="mt-2 md:mt-0 flex items-center space-x-3 text-[10px]">
           <span>India</span>

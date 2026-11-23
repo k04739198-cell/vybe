@@ -13,8 +13,22 @@ const ICE_SERVERS: RTCConfiguration = {
   ],
 };
 
-const SOCKET_SERVER_URL =
+const RAW_SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5000';
+
+function getSocketServerUrl(): string {
+  if (
+    typeof window !== 'undefined' &&
+    window.location.protocol === 'https:' &&
+    !RAW_SOCKET_URL.includes('localhost') &&
+    !RAW_SOCKET_URL.includes('127.0.0.1')
+  ) {
+    return RAW_SOCKET_URL.replace(/^http:/, 'https:');
+  }
+  return RAW_SOCKET_URL;
+}
+
+const SOCKET_SERVER_URL = getSocketServerUrl();
 
 export function useWebRTC() {
   const [status, setStatus] = useState<ConnectionStatus>('idle');

@@ -5,10 +5,10 @@ import { ShieldCheck, Sparkles } from 'lucide-react';
 
 interface AgeGateModalProps {
   onVerified: () => void;
-  onOpenTerms: () => void;
+  onOpenTerms?: () => void;
 }
 
-export default function AgeGateModal({ onVerified, onOpenTerms }: AgeGateModalProps) {
+export default function AgeGateModal({ onVerified }: AgeGateModalProps) {
   const [isChecked, setIsChecked] = useState(false);
   const [visible, setVisible] = useState(false);
 
@@ -73,17 +73,25 @@ export default function AgeGateModal({ onVerified, onOpenTerms }: AgeGateModalPr
           />
           <span className="text-xs text-gray-300 leading-normal select-none group-hover:text-white transition-colors">
             I certify that I am at least <strong className="text-violet-400">18 years of age</strong> and accept the{' '}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenTerms();
-              }}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="text-violet-400 underline hover:text-violet-300"
             >
               Terms of Service
-            </button>{' '}
-            and Privacy Policy.
+            </a>{' '}
+            and{' '}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-violet-400 underline hover:text-violet-300"
+            >
+              Privacy Policy
+            </a>.
           </span>
         </label>
 
